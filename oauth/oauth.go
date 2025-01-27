@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"net/http"
 	"net/url"
+	"os"
 	"os/exec"
 	"runtime"
 	"strconv"
@@ -58,11 +59,12 @@ type AuthenticateUserFuncConfig struct {
 // Initiate an *AuthorizedClient with a given APPKEY, SECRET
 // TODO: Include the user's given callback URL, as if someone wants to host off-prem they should be able to
 // TODO: Investigate the previous statement, localhost might work for any implementation?
-func Initiate(APPKEY, SECRET string) *AuthorizedClient {
+func Initiate(APPKEY, SECRET, CBURL string) *AuthorizedClient {
 	conf := &oauth2.Config{
 
 		ClientID:     APPKEY, // Schwab App Key
 		ClientSecret: SECRET, // Schwab App Secret
+		RedirectURL:  CBURL,
 
 		Endpoint: oauth2.Endpoint{
 			AuthURL:  "https://api.schwabapi.com/v1/oauth/authorize",
@@ -129,7 +131,8 @@ func authenticateUser(oauthConfig *oauth2.Config, options ...AuthenticateUserOpt
 
 	// Redirect user to consent page to ask for permission
 	// for the scopes specified above.
-	oauthConfig.RedirectURL = fmt.Sprintf("https://%s", IP)
+	oauthConfig.RedirectURL = fmt.Sprintf(oauthConfig.RedirectURL)
+	// oauthConfig.RedirectURL = fmt.Sprintf("https://%s", IP)
 	// Some random string, random for each request
 	oauthStateString := randSeq(16)
 	ctx = context.WithValue(ctx, oauthStateStringContextKey, oauthStateString)
@@ -191,7 +194,11 @@ func startHTTPServer(ctx context.Context, conf *oauth2.Config) (clientChan chan 
 
 	http.HandleFunc("/", callbackHandler(ctx, conf, clientChan))
 
-	srv := &http.Server{}
+	addr, ok := os.LookupEnv("OAUTH_CALLBACK_ADDR")
+	if !ok {
+		addr = "127.0.0.1:443"
+	}
+	srv := &http.Server{Addr: addr}
 
 	// handle server shutdown signal
 	go func() {
@@ -227,9 +234,11 @@ func callbackHandler(ctx context.Context, oauthConfig *oauth2.Config, clientChan
 	return func(w http.ResponseWriter, r *http.Request) {
 		requestStateString := ctx.Value(oauthStateStringContextKey).(string)
 		responseStateString := r.FormValue("state")
+		// if the response state doesn not match the request state, return an error
 		if responseStateString != requestStateString {
 			fmt.Printf("invalid oauth state, expected '%s', got '%s'\n", requestStateString, responseStateString)
-			http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+			w.Write([]byte(fmt.Sprintf("invalid oauth state, expected '%s', got '%s'", requestStateString, responseStateString)))
+			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 
@@ -237,9 +246,11 @@ func callbackHandler(ctx context.Context, oauthConfig *oauth2.Config, clientChan
 		token, err := oauthConfig.Exchange(ctx, code)
 		if err != nil {
 			fmt.Printf("oauthoauthConfig.Exchange() failed with '%s'\n", err)
-			http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+			w.Write([]byte(fmt.Sprintf("oauthoauthConfig.Exchange() failed with '%s'\n", err)))
+			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
+		log.Printf(fmt.Sprintf("Access token: %s", token.AccessToken))
 		// The HTTP Client returned by oauthConfig.Client will refresh the token as necessary
 		client := &AuthorizedClient{
 			oauthConfig.Client(ctx, token),
