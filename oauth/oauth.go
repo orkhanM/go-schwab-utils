@@ -57,8 +57,6 @@ type AuthenticateUserFuncConfig struct {
 }
 
 // Initiate an *AuthorizedClient with a given APPKEY, SECRET
-// TODO: Include the user's given callback URL, as if someone wants to host off-prem they should be able to
-// TODO: Investigate the previous statement, localhost might work for any implementation?
 func Initiate(APPKEY, SECRET, CBURL string) *AuthorizedClient {
 	conf := &oauth2.Config{
 
