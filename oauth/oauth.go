@@ -127,10 +127,6 @@ func authenticateUser(oauthConfig *oauth2.Config, options ...AuthenticateUserOpt
 	sslcli := &http.Client{Transport: tr}
 	ctx := context.WithValue(context.Background(), oauth2.HTTPClient, sslcli)
 
-	// Redirect user to consent page to ask for permission
-	// for the scopes specified above.
-	oauthConfig.RedirectURL = fmt.Sprintf(oauthConfig.RedirectURL)
-	// oauthConfig.RedirectURL = fmt.Sprintf("https://%s", IP)
 	// Some random string, random for each request
 	oauthStateString := randSeq(16)
 	ctx = context.WithValue(ctx, oauthStateStringContextKey, oauthStateString)
