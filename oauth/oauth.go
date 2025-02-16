@@ -244,7 +244,6 @@ func callbackHandler(ctx context.Context, oauthConfig *oauth2.Config, clientChan
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		log.Printf(fmt.Sprintf("Access token: %s", token.AccessToken))
 		// The HTTP Client returned by oauthConfig.Client will refresh the token as necessary
 		client := &AuthorizedClient{
 			oauthConfig.Client(ctx, token),
